@@ -1,0 +1,71 @@
+= JBTM-3610 - Introduce new suspension/shutdown logic for the Recovery Manager
+:author:            Manuel Finelli
+:email:             jfinelli@redhat.com
+:toc:               left
+:icons:             font
+:idprefix:
+:idseparator:       -
+
+== Overview
+
+Thanks to [this](https://wildfly.zulipchat.com/#narrow/stream/194727-cloud/topic/Recovery.20of.20transactions) conversation on WildFly’s Zulip, it has become clear that the recovery of transactions is an important functionality that should be available in every Cloud environment Naryana needs to be used in. The WildFly community, for instance, employs Narayana only on K8s/OpenShift and transaction recovery is carried out through the WildFly/EAP K8s Operator. However, the use of a “middleman” has proved to be complicated to maintain, to improve, and especially to migrate to other Cloud environments. On top of that, Narayana should be available on Cloud platforms on its own. This raises the need to suspend the Recovery Manager only when there are no more (in-doubt or in-flight) transactions in the Object Store.
+
+*Proposal*: The Narayana team will investigate the possibility of introducing a new suspension logic for the Recovery Manager where the Periodic Recovery loop will be shut down only when there are no more transactions in the Object Store.
+
+*Extra info*: Discussion about the design, has been addressed [publicly in our Zulip channel](https://narayana.zulipchat.com/#narrow/stream/323715-developers/topic/Transactions.20Recovery.20in.20WildFly.20on.20K8s.20.28JBTM-3610.29)
+
+== Issue Metadata
+
+=== Issue
+
+- [JBTM-3610](https://issues.redhat.com/browse/JBTM-3610)
+
+=== Related Issues
+
+Related issues are linked in JBTM-3610
+
+=== Dev Contacts
+
+- mailto:jfinelli@redhat.com[Manuel Finelli]
+
+=== QE Contacts
+
+- mailto:jfinelli@redhat.com[Manuel Finelli]
+
+=== Testing By
+// Put an x in the relevant field to indicate if testing will be done by Engineering or QE. 
+// Discuss with QE during the Kickoff state to decide this
+- [x] Engineering
+- [ ] QE
+
+=== Affected Projects or Components
+
+- Narayana - ArjunaCore
+
+=== Other Interested Projects
+
+- EAP/WildFly
+- EAP/WildFly K8s Operator
+- Quarkus
+
+== Requirements
+
+- As discussed in [this](https://wildfly.zulipchat.com/#narrow/stream/194727-cloud/topic/Recovery.20of.20transactions) thread, the design of using the JBoss CLI to control transaction recovery on the cloud turned out to be hard to maintain and develop
+  - The root cause of this issue is that the process of recovering transactions should not be controlled from outside Narayana
+    - Transaction recovery is tightly related to the transaction lifecycle and, as a consequence, it should be taken care of within the transaction framework
+- The future development of Narayana as "Transaction as a Service" and the possibility of deploying Narayana on the Cloud on its own are fundamental requirements that support the introduction of this new logic to recover transactions when Narayana is suspended/shut down. In other words, Narayana should be able to deal with transaction recovery on its own and the suspension/termination of Narayana should be possible only when in-flight/in-doubt transactions are terminated. This is a fundamental step to make Narayana available on the Cloud (i.e. without any middleman or without any integration). In fact, pods can be scaled down (programmatically but also unexpectedly) and this can interfere with data integrity if Narayana does not complete the txns left in the Object Store before shutdown.
+- There could be a requirement from Quarkus to be able to shut down Narayana’s Recovery Manager only when there are no more transactions left in the Object Store. In fact, Amos’s [PR](https://github.com/quarkusio/quarkus/pull/26161) stops the Recovery Manager without considering in-flight/in-doubt transactions (the async variable is passed as true, which means that the Recovery Manager does not even wait for the current periodic scan to finish, i.e. any in-flight/in-doubt transactions will not have any chance to recover)
+  - Last but not least, in the hypothetical scenario where other Application Servers need to employ Narayana as their Transaction Manager, the possibility to suspend the AS only when there are no more leftover txns becomes an important feature that Narayana should supply. For example, the HP-AS [dealt with graceful shutdown](https://lists.jboss.org/archives/list/wildfly-dev@lists.jboss.org/message/25EAU6DADSVN3UJ32PRE3UBA6MXJZEGU/) restarting Narayana/the AS. However, we should consider that Narayana’s recovery when restarting the host may no longer be sufficient. In fact, cloud environments are ephemeral hence they do not offer a stable and reliable environment. And even though there are solutions to have more stability (e.g. StatefulSet in K8s), once the virtual container (i.e. pod) is terminated, there is not a way to return it to the same status it was. From Narayana’s point of view, this means that the same AS (and related “storage”) cannot be brought back to life once a SIGKILL is sent to the AS/pod (and related “storage”). As a consequence, Narayana cannot rely on its “old” recovery logic to recover transactions after a pod has been terminated. This logic applies to all Application Servers that need to move to cloud environments.
+- Quarkus offers a [graceful shutdown](https://quarkus.io/guides/lifecycle#graceful-shutdown) and this functionality can be improved with transaction recovery. I am currently speaking with the Quarkus team, who is very interested in a new logic to suspend/shut down Narayana's Recovery Manager (more on this to come)
+
+=== Nice-to-Have Requirements
+
+- If this feature will be developed within Narayana, we do not want to significantly change the framework’s API
+
+== Test Plan
+
+New unit-test methods will be introduced within ArjunaCore to checko the new suspension of the Recovery Manager
+
+== Community Documentation
+
+As the API of the Recovery Manager will not change, there is not need to introduce a new documentation for the suspension logic. In fact, only few configurations in the Recovery Manager Bean will be added.
