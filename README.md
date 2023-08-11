@@ -1,6 +1,8 @@
 # Narayana Proposals
+
 ## Introduction
-This workflow provides a guideline to formally define the stages to propose, design, implement, and merge new Requests for Enhancement (RFEs) in the Narayana project.
+
+This workflow provides a guideline to formally define the stages to propose, design, implement, and merge new Requests for Enhancement (RFEs) in the Narayana project. The process defined here can be followed by an assignee who would like to reach pre-agreement for the design they would like to use for the implementation of RFEs in the Narayana project. On the other hand, this workflow becomes a mandatory process when addressing larger scoped or complex features, and when there are disagreements among the community members of Narayana.
 
 The ultimate goal of this workflow is the optimisation of the proposal management of the Narayana project, in the effort of achieving a smoother transition of new RFEs from conceptualisation to realisation while fostering collaboration and knowledge sharing in our community.
 
